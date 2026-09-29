@@ -1,0 +1,12 @@
+# Secrets - never upload to GitHub
+.env
+
+# Customer data - stays on the server only
+data/
+
+# Installed packages (Velocity installs these itself)
+node_modules/
+
+# Local tools
+ngrok.exe
+*.log

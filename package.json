@@ -1,0 +1,12 @@
+{
+  "name": "spinco-card-bot",
+  "version": "1.0.0",
+  "description": "WhatsApp bot that reads business cards and saves them to a CRM",
+  "main": "server.js",
+  "scripts": {
+    "start": "node --env-file=.env server.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

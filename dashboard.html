@@ -1,0 +1,190 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spinco Card CRM</title>
+<style>
+  :root {
+    --bg: #f4f6f5; --surface: #ffffff; --border: #e2e6e4; --text: #17201c; --muted: #66706b;
+    --accent: #128c5e; --accent-soft: #e3f4ec; --danger: #c0392b; --danger-soft: #fbe9e7;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111614; --surface: #1a211e; --border: #2b3430; --text: #e8eeeb; --muted: #97a39d;
+      --accent: #3ccf8e; --accent-soft: #173327; --danger: #ff7b6b; --danger-soft: #3a1f1c; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px;
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap; position: sticky; top: 0; z-index: 5; }
+  h1 { font-size: 20px; margin: 0; font-weight: 600; }
+  h1 span { color: var(--accent); }
+  .spacer { flex: 1; }
+  main { max-width: 1200px; margin: 0 auto; padding: 20px 16px 48px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .stat b { display: block; font-size: 26px; font-weight: 600; }
+  .stat small { color: var(--muted); }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 18px; }
+  input, select, button { font: inherit; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 8px; padding: 9px 12px; }
+  input[type=search] { flex: 1; min-width: 200px; }
+  button { cursor: pointer; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button:hover { filter: brightness(0.96); }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 16px; }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+    display: flex; flex-direction: column; }
+  .card img { width: 100%; aspect-ratio: 16 / 10; object-fit: cover; background: var(--border); cursor: zoom-in; display: block; }
+  .body { padding: 14px 16px 16px; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+  .name { font-size: 17px; font-weight: 600; }
+  .role { color: var(--muted); margin-top: -4px; }
+  .row { display: flex; gap: 8px; word-break: break-word; }
+  .row .k { color: var(--muted); min-width: 70px; }
+  .row a { color: var(--accent); text-decoration: none; }
+  .meta { margin-top: auto; padding-top: 10px; border-top: 1px dashed var(--border);
+    display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 8px; font-size: 13px; color: var(--muted); }
+  .chip { background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 3px 10px; font-weight: 500; cursor: pointer; border: 0; font-size: 13px; white-space: nowrap; }
+  .del { border: 0; background: none; color: var(--muted); padding: 4px 6px; font-size: 13px; }
+  .del.confirm { background: var(--danger-soft); color: var(--danger); border-radius: 6px; }
+  .empty { text-align: center; color: var(--muted); padding: 60px 20px; background: var(--surface);
+    border: 1px dashed var(--border); border-radius: 12px; }
+  .viewer { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: none; align-items: center; justify-content: center; z-index: 10; padding: 20px; }
+  .viewer.open { display: flex; }
+  .viewer img { max-width: 100%; max-height: 100%; border-radius: 8px; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span>Spinco</span> Card CRM</h1>
+  <div class="spacer"></div>
+  <span id="updated" style="color:var(--muted);font-size:13px"></span>
+  <button id="refresh">Refresh</button>
+  <button id="export" class="primary">Export to Excel (CSV)</button>
+</header>
+
+<main>
+  <section class="stats">
+    <div class="stat"><b id="s-total">0</b><small>Total cards</small></div>
+    <div class="stat"><b id="s-today">0</b><small>Scanned today</small></div>
+    <div class="stat"><b id="s-senders">0</b><small>Registered senders</small></div>
+    <div class="stat"><b id="s-companies">0</b><small>Companies</small></div>
+  </section>
+
+  <section class="toolbar">
+    <input id="q" type="search" placeholder="Search name, company, phone, email...">
+    <select id="sender"><option value="">All senders</option></select>
+  </section>
+
+  <section id="grid" class="grid"></section>
+</main>
+
+<div id="viewer" class="viewer"><img alt="Business card"></div>
+
+<script>
+let cards = [];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const list = (v) => (Array.isArray(v) ? v : v ? [v] : []);
+const fmtNum = (n) => "+" + n;
+
+async function load() {
+  try {
+    const res = await fetch("/api/cards");
+    cards = await res.json();
+    $("updated").textContent = "Updated " + new Date().toLocaleTimeString();
+    fillSenders();
+    render();
+  } catch (e) {
+    $("updated").textContent = "Could not load data";
+  }
+}
+
+function fillSenders() {
+  const sel = $("sender"), current = sel.value;
+  const counts = {};
+  cards.forEach((c) => (counts[c.sender_number] = (counts[c.sender_number] || 0) + 1));
+  sel.innerHTML = '<option value="">All senders</option>' +
+    Object.entries(counts).map(([n, k]) => `<option value="${esc(n)}">${fmtNum(esc(n))} (${k})</option>`).join("");
+  sel.value = counts[current] ? current : "";
+}
+
+function filtered() {
+  const q = $("q").value.trim().toLowerCase(), s = $("sender").value;
+  return cards.filter((c) => {
+    if (s && c.sender_number !== s) return false;
+    if (!q) return true;
+    return [c.name, c.company, c.designation, c.website, c.address, ...list(c.phones), ...list(c.emails)]
+      .join(" ").toLowerCase().includes(q);
+  });
+}
+
+function render() {
+  const today = new Date().toDateString();
+  $("s-total").textContent = cards.length;
+  $("s-today").textContent = cards.filter((c) => new Date(c.created_at).toDateString() === today).length;
+  $("s-senders").textContent = new Set(cards.map((c) => c.sender_number)).size;
+  $("s-companies").textContent = new Set(cards.map((c) => (c.company || "").toLowerCase()).filter(Boolean)).size;
+
+  const rows = filtered();
+  if (!rows.length) {
+    $("grid").innerHTML = `<div class="empty" style="grid-column:1/-1">${cards.length ? "No cards match your search." : "No cards yet. Send a business card photo to your WhatsApp bot and it will appear here."}</div>`;
+    return;
+  }
+  $("grid").innerHTML = rows.map((c) => {
+    const line = (k, v) => (v ? `<div class="row"><span class="k">${k}</span><span>${v}</span></div>` : "");
+    const phones = list(c.phones).map((p) => `<a href="tel:${esc(p)}">${esc(p)}</a>`).join(", ");
+    const emails = list(c.emails).map((e) => `<a href="mailto:${esc(e)}">${esc(e)}</a>`).join(", ");
+    const site = c.website ? `<a href="${/^https?:/i.test(c.website) ? esc(c.website) : "https://" + esc(c.website)}" target="_blank" rel="noopener">${esc(c.website)}</a>` : "";
+    return `<article class="card">
+      <img src="/images/${encodeURIComponent(c.image_file)}" alt="Business card" loading="lazy" data-zoom>
+      <div class="body">
+        <div class="name">${esc(c.name) || "Unknown name"}</div>
+        ${c.designation ? `<div class="role">${esc(c.designation)}</div>` : ""}
+        ${line("Company", esc(c.company))}
+        ${line("Phone", phones)}
+        ${line("Email", emails)}
+        ${line("Website", site)}
+        ${line("Address", esc(c.address))}
+        <div class="meta">
+          <button class="chip" data-sender="${esc(c.sender_number)}" title="Show all cards from this sender">From ${fmtNum(esc(c.sender_number))}</button>
+          <span>${new Date(c.created_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</span>
+          <button class="del" data-del="${esc(c.id)}">Delete</button>
+        </div>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+$("grid").addEventListener("click", async (e) => {
+  const t = e.target;
+  if (t.dataset.zoom !== undefined) { $("viewer").querySelector("img").src = t.src; $("viewer").classList.add("open"); }
+  if (t.dataset.sender) { $("sender").value = t.dataset.sender; render(); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  if (t.dataset.del) {
+    if (!t.classList.contains("confirm")) { t.classList.add("confirm"); t.textContent = "Sure? Click again"; setTimeout(() => { t.classList.remove("confirm"); t.textContent = "Delete"; }, 3000); return; }
+    await fetch("/api/cards/" + encodeURIComponent(t.dataset.del), { method: "DELETE" });
+    load();
+  }
+});
+$("viewer").addEventListener("click", () => $("viewer").classList.remove("open"));
+$("q").addEventListener("input", render);
+$("sender").addEventListener("change", render);
+$("refresh").addEventListener("click", load);
+
+$("export").addEventListener("click", () => {
+  const head = ["Name", "Designation", "Company", "Phones", "Emails", "Website", "Address", "Sender number", "Scanned at"];
+  const q = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const body = filtered().map((c) => [c.name, c.designation, c.company, list(c.phones).join(" / "), list(c.emails).join(" / "),
+    c.website, c.address, "+" + c.sender_number, new Date(c.created_at).toLocaleString()].map(q).join(","));
+  const blob = new Blob(["﻿" + [head.map(q).join(","), ...body].join("\r\n")], { type: "text/csv;charset=utf-8" });
+  const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(blob), download: `spinco-cards-${new Date().toISOString().slice(0, 10)}.csv` });
+  a.click();
+  URL.revokeObjectURL(a.href);
+});
+
+load();
+setInterval(load, 30000);
+</script>
+</body>
+</html>
